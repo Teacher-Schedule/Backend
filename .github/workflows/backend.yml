@@ -1,0 +1,118 @@
+name: Teacher Schedule backend
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+
+    steps:
+      # Checkout the repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Log in to Docker Hub
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # Build Docker images
+      - name: Build PHP image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_php:latest -f ./docker/php.Dockerfile ./docker
+
+      - name: Build Composer image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_composer:latest -f ./docker/composer.Dockerfile ./docker
+
+      - name: Build Artisan image
+        run: |
+          docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_artisan:latest -f ./docker/php.Dockerfile ./docker
+
+      # Push Docker images to Docker Hub
+      - name: Push PHP image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_php:latest
+
+      - name: Push Composer image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_composer:latest
+
+      - name: Push Artisan image to Docker Hub
+        run: |
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/teacher_schedule_backend_artisan:latest
+
+      # Install SSH client for server access
+      - name: Installing SSH client
+        run: sudo apt-get install -y openssh-client
+
+      # Add SSH key for accessing the server
+      - name: Add SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          eval $(ssh-agent -s)
+          ssh-add private_key
+
+      # Pull the latest code from Git repository on server
+      - name: Pull latest code from Git repository on server
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
+            cd /var/www/app
+            git checkout master
+            git pull origin master
+            ls -la
+          EOF
+
+  deploy:
+    name: Deploy to Server
+    runs-on: ubuntu-latest
+    needs: build
+    steps:
+      # Установка SSH-клиента для подключения к серверу
+      - name: Installing SSH client
+        run: sudo apt-get install -y openssh-client
+
+      # Добавляем SSH-ключ
+      - name: Add SSH key
+        run: |
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > private_key
+          chmod 600 private_key
+          eval $(ssh-agent -s)
+          ssh-add private_key
+
+      - name: Deploy application via SSH
+        env:
+          DOCKERHUB_USERNAME: ${{ secrets.DOCKERHUB_USERNAME }}
+          DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
+        run: |
+          ssh -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
+            # Клонируем или обновляем репозиторий
+            if [ ! -d "/var/www/app" ]; then
+              git clone git@github.com:Evollt-VPN/Backend.git /var/www/app
+            else
+              cd /var/www/app
+              git reset --hard
+              git pull origin master
+            fi
+
+            # Логин в Docker Hub и загрузка образов
+            docker login -u $DOCKERHUB_USERNAME -p $DOCKERHUB_PASSWORD
+            docker pull $DOCKERHUB_USERNAME/teacher_schedule_backend_php:latest
+            docker pull $DOCKERHUB_USERNAME/teacher_schedule_backend_composer:latest
+            docker pull $DOCKERHUB_USERNAME/teacher_schedule_backend_artisan:latest
+            docker pull mysql:8.0
+            docker pull nginx:stable-alpine
+
+            cd /var/www/app
+
+            docker compose down
+            docker compose up -d
+            docker compose run composer install
+          EOF
