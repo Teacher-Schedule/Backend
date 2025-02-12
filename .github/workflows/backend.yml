@@ -60,16 +60,6 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add private_key
 
-      # Pull the latest code from Git repository on server
-      - name: Pull latest code from Git repository on server
-        run: |
-          ssh -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
-            cd /var/www/app
-            git checkout master
-            git pull origin master
-            ls -la
-          EOF
-
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
@@ -93,11 +83,13 @@ jobs:
           DOCKERHUB_PASSWORD: ${{ secrets.DOCKERHUB_PASSWORD }}
         run: |
           ssh -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
+            # Вход в Docker Hub на сервере
+            docker login -u ${{ secrets.DOCKERHUB_USERNAME }} -p ${{ secrets.DOCKERHUB_PASSWORD }}
             # Клонируем или обновляем репозиторий
-            if [ ! -d "/var/www/app" ]; then
-              git clone git@github.com:Evollt-VPN/Backend.git /var/www/app
+            if [ ! -d "/var/www/backend" ]; then
+              git clone git@github.com:Evollt-VPN/Backend.git /var/www/backend
             else
-              cd /var/www/app
+              cd /var/www/backend
               git reset --hard
               git pull origin master
             fi
@@ -110,7 +102,7 @@ jobs:
             docker pull mysql:8.0
             docker pull nginx:stable-alpine
 
-            cd /var/www/app
+            cd /var/www/backend
 
             docker compose down
             docker compose up -d
