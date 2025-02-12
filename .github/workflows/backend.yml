@@ -60,17 +60,6 @@ jobs:
           eval $(ssh-agent -s)
           ssh-add private_key
 
-      # Pull the latest code from Git repository on server
-      - name: Pull latest code from Git repository on server
-        run: |
-          ssh -v -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
-
-            cd /var/www/backend
-            git checkout master
-            git pull origin master
-            ls -la
-          EOF
-
   deploy:
     name: Deploy to Server
     runs-on: ubuntu-latest
