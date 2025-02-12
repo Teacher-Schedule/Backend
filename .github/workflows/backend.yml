@@ -63,7 +63,8 @@ jobs:
       # Pull the latest code from Git repository on server
       - name: Pull latest code from Git repository on server
         run: |
-          ssh -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
+          ssh -v -o StrictHostKeyChecking=no -i private_key ${{ secrets.SSH_USER }}@${{ secrets.SERVER_IP }} <<EOF
+
             cd /var/www/backend
             git checkout master
             git pull origin master
